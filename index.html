@@ -63,7 +63,7 @@ textarea.f{resize:none;padding:2pt 3pt;line-height:1.35;overflow:hidden}
 .appver{text-align:center;font-size:11px;color:var(--muted);padding:18px 16px 24px;border-top:1px solid var(--line);margin:8px auto 0;max-width:1100px;display:grid;gap:3px;direction:ltr}
 .appver .wmk{font-size:12px;opacity:.75;unicode-bidi:isolate}
 .appver .cr{opacity:.6}
-.toast{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;z-index:60;pointer-events:none}
+.toast{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);text-align:center;line-height:1.6;background:var(--navy);color:#fff;padding:9px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;z-index:60;pointer-events:none}
 .toast.show{opacity:1}
 
 @media (max-width:640px){.bar-in{gap:7px;flex-wrap:nowrap}.brand{flex:1 1 0}.brand b,.brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brand b{font-size:15px}.btn{padding:7px 9px;font-size:13px}.btn .t{display:none}}
@@ -94,7 +94,7 @@ textarea.f{resize:none;padding:2pt 3pt;line-height:1.35;overflow:hidden}
 </div></div></main>
 <div class="dd" id="dd" role="listbox"></div>
 <div class="toast" id="toast"></div>
-<footer class="appver" dir="ltr"><div class="wmk">Made by Engineer Fawaz Alzayed · <bdi dir="rtl">فواز الزايد</bdi> · 2026</div><div class="cr">© <span id="cryear">2026</span> Fawaz Alzayed · All rights reserved</div><div id="appver">v0.2.1-beta</div></footer>
+<footer class="appver" dir="ltr"><div class="wmk">Made by Engineer Fawaz Alzayed · <bdi dir="rtl">فواز الزايد</bdi> · 2026</div><div class="cr">© <span id="cryear">2026</span> Fawaz Alzayed · All rights reserved</div><div id="appver">v0.2.2-beta</div></footer>
 
 <script>!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"function"==typeof define&&define.amd?define(["exports"],e):e((t=t||self).PDFLib={})}(this,(function(t){"use strict";
 /*! *****************************************************************************
@@ -384,7 +384,7 @@ function fit(){
 window.addEventListener('resize',fit);fit();
 
 /* ---- buttons ---- */
-function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(function(){t.classList.remove('show');},2200);}
+function toast(m,ms){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(function(){t.classList.remove('show');},ms||2200);}
 document.getElementById('bPrint').addEventListener('click',function(){
   closeDD();var t=document.title;document.title=docName();
   window.print();setTimeout(function(){document.title=t;},1500);
@@ -464,8 +464,10 @@ document.getElementById('bPdf').addEventListener('click',async function(){
   btn.disabled=false;
 });
 /* ---- send to WhatsApp ----
-   Phones: the PDF goes into the share sheet (pick WhatsApp, then the group).
-   Computers / browsers without file sharing: the PDF is downloaded and WhatsApp opens with the incident title. */
+   Phones: only the PDF goes into the share sheet (pick WhatsApp, then the group). No caption text:
+   some Samsung/WhatsApp setups drop the file or refuse the whole share when text comes with it.
+   If sharing files is not possible or is refused: the PDF is saved to Downloads, WhatsApp opens,
+   and a message says to attach the file from 📎. */
 var ready=null;   // {key, file} pre-built so the share sheet opens straight away (iPhone needs that)
 function stateKey(){return JSON.stringify(state);}
 async function buildFile(){
@@ -477,26 +479,28 @@ async function buildFile(){
 var prepT=null;
 window.KU_PREPARE_PDF=function(){clearTimeout(prepT);prepT=setTimeout(function(){buildFile().catch(function(){});},900);};
 function canShareFiles(f){try{return !!(navigator.canShare&&navigator.share&&navigator.canShare({files:[f]}));}catch(e){return false;}}
+function saveAndOpenWhatsApp(f,code){
+  var url=URL.createObjectURL(f),a=document.createElement('a');a.href=url;a.download=f.name;document.body.appendChild(a);a.click();
+  setTimeout(function(){a.remove();URL.revokeObjectURL(url);},60000);
+  toast('تم حفظ الملف في التنزيلات — افتح محادثة واتساب وأرفقه من 📎 ← مستند'+(code?' ['+code+']':''),7000);
+  setTimeout(function(){window.open('https://wa.me/','_blank','noopener');},1500);
+}
 document.getElementById('bWa').addEventListener('click',async function(){
-  closeDD();var btn=this,title=docName();
+  closeDD();var btn=this,f=null;
   var fresh=ready&&ready.key===stateKey();
   btn.disabled=true;
   try{
-    var f=await buildFile();
+    f=await buildFile();
     if(canShareFiles(f)){
-      try{await navigator.share({files:[f],title:title,text:title});}
+      try{await navigator.share({files:[f]});}
       catch(e){
-        if(e&&e.name==='AbortError'){/* user closed the sheet */}
-        else if(!fresh){toast('الملف جاهز — اضغط «إرسال واتساب» مرة أخرى');}
-        else throw e;
+        var n=(e&&e.name)||'Error';
+        if(n==='AbortError'){/* user closed the sheet */}
+        else if(n==='NotAllowedError'&&!fresh){toast('الملف جاهز — اضغط «إرسال واتساب» مرة أخرى',4000);}
+        else saveAndOpenWhatsApp(f,'S-'+n);
       }
-    }else{
-      var url=URL.createObjectURL(f),a=document.createElement('a');a.href=url;a.download=f.name;document.body.appendChild(a);a.click();
-      setTimeout(function(){a.remove();URL.revokeObjectURL(url);},60000);
-      window.open('https://wa.me/?text='+encodeURIComponent(title),'_blank','noopener');
-      toast('تم تنزيل الملف — أرفقه في محادثة واتساب');
-    }
-  }catch(e){console.error(e);toast('تعذّر الإرسال — استخدم «تنزيل PDF» ثم أرسله من واتساب');}
+    }else saveAndOpenWhatsApp(f,'');
+  }catch(e){console.error(e);toast('تعذّر إنشاء الملف — استخدم «تنزيل PDF» ['+((e&&e.name)||'Error')+']',7000);}
   btn.disabled=false;
 });
 setTimeout(function(){buildFile().catch(function(){});},1500);
